@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Course</title>
+  </head>
+  <body>
+    <h1><%= it.courseName %></h1>
+    <% if (it.feedbackGiven) { %>
+      <p>You have already given feedback for this course. Thank you!</p>
+    <% } else { %>
+      <form method="POST" action="/courses/<%= it.courseId %>/feedback">
+        <button type="submit" name="feedback" value="excellent">Excellent</button>
+        <button type="submit" name="feedback" value="very good">Very good</button>
+        <button type="submit" name="feedback" value="good">Good</button>
+        <button type="submit" name="feedback" value="fair">Fair</button>
+        <button type="submit" name="feedback" value="poor">Poor</button>
+      </form>
+    <% } %>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Courses</title>
+  </head>
+  <body>
+    <h1>Courses</h1>
+    <% if (it.error) { %>
+      <p style="color: red;"><%= it.error %></p>
+    <% } %>
+    <form method="POST" action="/courses">
+      <label for="courseName">Course name:</label>
+      <input type="text" id="courseName" name="courseName" />
+      <button type="submit">Add</button>
+    </form>
+    <ul>
+      <% it.courses.forEach((course, index) => { %>
+        <li>
+          <a href="/courses/<%= index %>"><%= course %></a>
+        </li>
+      <% }); %>
+    </ul>
+  </body>
+</html>
