@@ -1,20 +1,23 @@
-import { Eta } from "https://deno.land/x/eta@v3.4.0/src/index.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.11/mod.ts";
 import { getSignedCookie, setSignedCookie } from "https://deno.land/x/hono@v3.12.11/helper.ts";
+import { Eta } from "https://deno.land/x/eta@v3.4.0/src/index.ts";
 
-const eta = new Eta({ views: `${Deno.cwd()}/templates/` });
 const app = new Hono();
+const eta = new Eta({ views: `${Deno.cwd()}/templates` });
 
+const courses = new Map();
 const secret = "secret";
-const courses = [];
-const feedbackRecords = new Map();
 
-app.get("/", async (c) => {
+app.get("/", (c) => {
   return c.redirect("/courses");
 });
 
-app.get("/courses", async (c) => {
-  return c.html(await eta.render("courses.eta", { courses }));
+app.get("/courses", (c) => {
+  return c.html(
+    eta.render("courses.eta", {
+      courses: Array.from(courses.keys()),
+    }),
+  );
 });
 
 app.post("/courses", async (c) => {
@@ -23,62 +26,60 @@ app.post("/courses", async (c) => {
 
   if (!courseName || courseName.length < 4) {
     return c.html(
-      await eta.render("courses.eta", {
+      eta.render("courses.eta", {
         error: "The course name should be a string of at least 4 characters.",
-        courses,
+        courses: Array.from(courses.keys()),
       }),
     );
   }
 
-  courses.push(courseName);
+  if (!courses.has(courseName)) {
+    courses.set(courseName, { Excellent: 0, Good: 0, Fair: 0, Poor: 0 });
+  }
+
   return c.redirect("/courses");
 });
 
-app.get("/courses/:id", async (c) => {
-  const courseId = parseInt(c.req.param("id"));
-  const courseName = courses[courseId];
+app.get("/courses/:course", async (c) => {
+  const courseName = c.req.param("course");
+  const feedback = courses.get(courseName);
 
-  if (!courseName) {
-    return c.text("Course not found.", 404);
+  if (!feedback) {
+    return c.text("Course not found", 404);
   }
 
   const sessionId = await getSignedCookie(c, secret, "sessionId") ?? crypto.randomUUID();
   await setSignedCookie(c, "sessionId", sessionId, secret, { path: "/" });
 
-  const userFeedbackKey = `${sessionId}-${courseId}`;
-  const feedbackGiven = feedbackRecords.has(userFeedbackKey);
+  const feedbackGiven = (await getSignedCookie(c, secret, sessionId)) === courseName;
 
   return c.html(
-    await eta.render("course.eta", {
+    eta.render("course.eta", {
       courseName,
-      courseId,
+      feedback,
       feedbackGiven,
     }),
   );
 });
 
-app.post("/courses/:id/feedback", async (c) => {
-  const courseId = parseInt(c.req.param("id"));
-  const courseName = courses[courseId];
-
-  if (!courseName) {
-    return c.text("Course not found.", 404);
-  }
-
-  const sessionId = await getSignedCookie(c, secret, "sessionId") ?? crypto.randomUUID();
-  await setSignedCookie(c, "sessionId", sessionId, secret, { path: "/" });
-
-  const userFeedbackKey = `${sessionId}-${courseId}`;
+app.post("/courses/:course/feedback", async (c) => {
+  const courseName = c.req.param("course");
   const feedbackType = (await c.req.parseBody()).feedback;
 
-  if (!feedbackRecords.has(userFeedbackKey)) {
-    feedbackRecords.set(userFeedbackKey, { good: 0, fair: 0, poor: 0 });
+  const feedback = courses.get(courseName);
+
+  if (!feedback || !["Excellent", "Good", "Fair", "Poor"].includes(feedbackType)) {
+    return c.text("Course not found", 404);
   }
 
-  const feedbackCounts = feedbackRecords.get(userFeedbackKey);
-  feedbackCounts[feedbackType] = (feedbackCounts[feedbackType] || 0) + 1;
+  const sessionId = await getSignedCookie(c, secret, "sessionId");
+  if (!sessionId) {
+    return c.redirect(`/courses/${courseName}`);
+  }
 
-  return c.redirect(`/courses/${courseId}`);
+  await setSignedCookie(c, sessionId, courseName, secret, { path: "/" });
+  feedback[feedbackType]++;
+  return c.redirect(`/courses/${courseName}`);
 });
 
 export default app;
